@@ -22,6 +22,7 @@ import (
 //
 // These correspond to current operation values exposed over DBus and defined by `update_engine`:
 // https://github.com/coreos/update_engine/blob/v0.4.3/src/update_engine/update_attempter.h#L34-L43
+// TODO: Update to match new update backend
 const (
 	UpdateStatusIdle                = "UPDATE_STATUS_IDLE"
 	UpdateStatusCheckingForUpdate   = "UPDATE_STATUS_CHECKING_FOR_UPDATE"
@@ -33,30 +34,50 @@ const (
 	UpdateStatusReportingErrorEvent = "UPDATE_STATUS_REPORTING_ERROR_EVENT"
 )
 
+// Status represents the current status of an update
+// TODO: This doesn't map to the current rpm-ostree dbus types as well as
+// I'd like. Should a new type be created or should this end up wrapping
+// multiple smaller types?
 type Status struct {
-	LastCheckedTime  int64
-	Progress         float64
+	OSName           string
+	Checksum         string
+	Version          string
+	Timestamp        int64
+	Origin           string
+	Signatures       []string
+	GPGEnabled       bool
+	RefHasNewCommit  bool
+	RPMDiff          map[string]string
 	CurrentOperation string
-	NewVersion       string
-	NewSize          int64
+	//Advisories  a(suuasa{sv})
+	// LastCheckedTime  int64
+	// Progress         float64
+	// CurrentOperation string
+	// NewVersion       string
+	// NewSize          int64
 }
 
+// NewStatus creates a new status
 func NewStatus(body []interface{}) (s Status) {
-	s.LastCheckedTime = body[0].(int64)
-	s.Progress = body[1].(float64)
-	s.CurrentOperation = body[2].(string)
-	s.NewVersion = body[3].(string)
-	s.NewSize = body[4].(int64)
-
+	s.OSName = body[0].(string)
+	s.Checksum = body[1].(string)
+	s.Version = body[2].(string)
+	s.Timestamp = body[3].(int64)
+	s.Origin = body[4].(string)
+	s.Signatures = body[5].([]string)
+	s.GPGEnabled = body[6].(bool)
+	s.RefHasNewCommit = body[7].(bool)
+	s.RPMDiff = body[8].(map[string]string)
+	s.CurrentOperation = "" // TODO
 	return
 }
 
+// String turns the associated Status into a string
 func (s *Status) String() string {
-	return fmt.Sprintf("LastCheckedTime=%v Progress=%v CurrentOperation=%q NewVersion=%v NewSize=%v",
-		s.LastCheckedTime,
-		s.Progress,
+	return fmt.Sprintf("Timestamp=%v CurrentOperation=%v NewVersion=%v Checksum=%v",
+		s.Timestamp,
 		s.CurrentOperation,
-		s.NewVersion,
-		s.NewSize,
+		s.Version,
+		s.Checksum,
 	)
 }

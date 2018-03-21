@@ -23,19 +23,22 @@ import (
 )
 
 const (
-	dbusPath            = "/com/coreos/update1"
-	dbusInterface       = "com.coreos.update1.Manager"
-	dbusMember          = "StatusUpdate"
+	dbusPath            = "/org/projectatomic/rpmostree1"
+	dbusInterface       = "org.projectatomic.rpmostree1"
+	dbusMember          = "CachedUpdate"
 	dbusMemberInterface = dbusInterface + "." + dbusMember
 	signalBuffer        = 32 // TODO(bp): What is a reasonable value here?
 )
 
+// Client represents a way of working with the update logic remotely
 type Client struct {
 	conn   *dbus.Conn
 	object dbus.BusObject
 	ch     chan *dbus.Signal
 }
 
+// New creates a new instance of the Client struct, ensures it has a connection,
+// and is listening to for the proper signals
 func New() (*Client, error) {
 	c := new(Client)
 	var err error
@@ -58,7 +61,7 @@ func New() (*Client, error) {
 		return nil, err
 	}
 
-	c.object = c.conn.Object("com.coreos.update1", dbus.ObjectPath(dbusPath))
+	c.object = c.conn.Object(dbusInterface, dbus.ObjectPath(dbusPath))
 
 	// Setup the filter for the StatusUpdate signals
 	match := fmt.Sprintf("type='signal',interface='%s',member='%s'", dbusInterface, dbusMember)
@@ -117,6 +120,7 @@ func (c *Client) RebootNeededSignal(rcvr chan Status, stop <-chan struct{}) {
 
 // GetStatus gets the current status from update_engine
 func (c *Client) GetStatus() (Status, error) {
+	// TODO: update with new dbus call
 	call := c.object.Call(dbusInterface+".GetStatus", 0)
 	if call.Err != nil {
 		return Status{}, call.Err
@@ -127,6 +131,7 @@ func (c *Client) GetStatus() (Status, error) {
 // AttemptUpdate will trigger an update if available. This is an asynchronous
 // call - it returns immediately.
 func (c *Client) AttemptUpdate() error {
-	call := c.object.Call(dbusInterface+".AttemptUpdate", 0)
+	// TODO: update with new dbus call
+	call := c.object.Call(dbusInterface+".Upgrade", 0)
 	return call.Err
 }
