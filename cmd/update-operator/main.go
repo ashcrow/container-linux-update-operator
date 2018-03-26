@@ -9,6 +9,7 @@ import (
 	"github.com/coreos/pkg/flagutil"
 	"github.com/golang/glog"
 
+	"github.com/coreos/container-linux-update-operator/pkg/constants"
 	"github.com/coreos/container-linux-update-operator/pkg/k8sutil"
 	"github.com/coreos/container-linux-update-operator/pkg/operator"
 	"github.com/coreos/container-linux-update-operator/pkg/version"
@@ -18,12 +19,12 @@ var (
 	beforeRebootAnnotations flagutil.StringSliceFlag
 	afterRebootAnnotations  flagutil.StringSliceFlag
 	kubeconfig              = flag.String("kubeconfig", "", "Path to a kubeconfig file. Default to the in-cluster config if not provided.")
-	autoLabelContainerLinux = flag.Bool("auto-label-container-linux", false, "Auto-label Container Linux nodes with agent=true (convenience)")
+	autoLabelContainerLinux = flag.Bool("auto-label-container-linux", false, fmt.Sprintf("Auto-label %s nodes with agent=true (convenience)", constants.Branding))
 	printVersion            = flag.Bool("version", false, "Print version and exit")
 	// deprecated
 	analyticsEnabled optValue
 	manageAgent      = flag.Bool("manage-agent", false, "Manage the associated update-agent")
-	agentImageRepo   = flag.String("agent-image-repo", "quay.io/coreos/container-linux-update-operator", "The image to use for the managed agent, without version tag")
+	agentImageRepo   = flag.String("agent-image-repo", constants.DefaultAgentImageRepo, "The image to use for the managed agent, without version tag")
 )
 
 func main() {

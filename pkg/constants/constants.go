@@ -81,4 +81,7 @@ const (
 	// The value is a semver-parseable string. It should be present on each agent
 	// pod, as well as on the daemonset that manages them.
 	AgentVersion = Prefix + "agent-version"
+
+	// The default repo/image WITHOUT version tag to use for the agent
+	DefaultAgentImageRepo = "quay.io/coreos/container-linux-update-operator"
 )
