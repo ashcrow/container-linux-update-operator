@@ -188,18 +188,17 @@ func agentDaemonsetSpec(repo string) *v1beta1.DaemonSet {
 							Image:   agentImageName(repo),
 							Command: agentCommand(),
 							VolumeMounts: []v1.VolumeMount{
+								// dbus communication
 								{
 									Name:      "var-run-dbus",
 									MountPath: "/var/run/dbus",
 								},
+								// System bus communication
 								{
-									Name:      "etc-coreos",
-									MountPath: "/etc/coreos",
+									Name:      "run-dbus",
+									MountPath: "/run/dbus",
 								},
-								{
-									Name:      "usr-share-coreos",
-									MountPath: "/usr/share/coreos",
-								},
+								// TODO(ashcrow) May not be needed with new agent
 								{
 									Name:      "etc-os-release",
 									MountPath: "/etc/os-release",
@@ -235,18 +234,10 @@ func agentDaemonsetSpec(repo string) *v1beta1.DaemonSet {
 							},
 						},
 						{
-							Name: "etc-coreos",
+							Name: "run-dbus",
 							VolumeSource: v1.VolumeSource{
 								HostPath: &v1.HostPathVolumeSource{
-									Path: "/etc/coreos",
-								},
-							},
-						},
-						{
-							Name: "usr-share-coreos",
-							VolumeSource: v1.VolumeSource{
-								HostPath: &v1.HostPathVolumeSource{
-									Path: "/usr/share/coreos",
+									Path: "/run/dbus",
 								},
 							},
 						},
