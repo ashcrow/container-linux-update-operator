@@ -29,10 +29,10 @@ const (
 	leaderElectionEventSourceComponent = "update-operator-leader-election"
 	// agentDefaultAppName is the label value for the 'app' key that agents are
 	// expected to be labeled with.
-	agentDefaultAppName = "container-linux-update-agent"
+	agentDefaultAppName = constants.Branding + "-update-agent"
 	maxRebootingNodes   = 1
 
-	leaderElectionResourceName = "container-linux-update-operator-lock"
+	leaderElectionResourceName = constants.Branding + "-update-operator-lock"
 
 	// Arbitrarily copied from KVO
 	leaderElectionLease = 90 * time.Second

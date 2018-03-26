@@ -17,10 +17,11 @@ import (
 )
 
 var (
-	daemonsetName = "container-linux-update-agent-ds"
+	// Name of the daemon set
+	daemonsetName = fmt.Sprintf("%s-update-agent-ds", constants.Branding)
 
 	managedByOperatorLabels = map[string]string{
-		"managed-by": "container-linux-update-operator",
+		"managed-by": fmt.Sprintf("%s-update-operator", constants.Branding),
 		"app":        agentDefaultAppName,
 	}
 
@@ -58,7 +59,7 @@ func (k *Kontroller) legacyLabeler() {
 	nodesMissingLabel := k8sutil.FilterNodesByRequirement(nodelist.Items, updateAgentLabelMissing)
 	// match nodes that identify as Container Linux
 	nodesToLabel := k8sutil.FilterContainerLinuxNodes(nodesMissingLabel)
-	glog.V(6).Infof("Found Container Linux nodes to label: %+v", nodelist.Items)
+	glog.V(6).Infof("Found %s nodes to label: %+v", constants.Branding, nodelist.Items)
 
 	for _, node := range nodesToLabel {
 		glog.Infof("Setting label 'agent=true' on %q", node.Name)
@@ -264,10 +265,12 @@ func agentDaemonsetSpec(repo string) *v1beta1.DaemonSet {
 	}
 }
 
+// agentImageName reutrns an expanded $REPO:v$VERSION string
 func agentImageName(repo string) string {
 	return fmt.Sprintf("%s:v%s", repo, version.Version)
 }
 
+// agentCommand returns the proper command to execute the update agent
 func agentCommand() []string {
 	return []string{"/bin/update-agent"}
 }
