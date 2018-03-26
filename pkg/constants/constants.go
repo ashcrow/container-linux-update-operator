@@ -7,8 +7,11 @@ const (
 	True  = "true"
 	False = "false"
 
+	Branding     = "atomic"
+	HostBranding = "v1.redhat.com"
+
 	// Prefix used by all label and annotation keys.
-	Prefix = "container-linux-update.v1.coreos.com/"
+	Prefix = Branding + "-update." + HostBranding + "/"
 
 	// Key set to "true" by the update-agent when a reboot is requested.
 	AnnotationRebootNeeded = Prefix + "reboot-needed"
