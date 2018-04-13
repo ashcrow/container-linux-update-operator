@@ -59,7 +59,7 @@ func New() (*Client, error) {
 		return nil, err
 	}
 
-	/* find booted OS */
+	// find booted OS
 	sysroot := c.conn.Object(dbusName, dbus.ObjectPath(dbusSysroot))
 	prop, err := sysroot.GetProperty(dbusMember(dbusIfaceSysroot, "Booted"))
 	if err != nil {
@@ -76,6 +76,10 @@ func dbusMember(iface, member string) string {
 	return fmt.Sprintf("%s.%s", iface, member)
 }
 
+func dbusOSMember(member string) string {
+	return fmt.Sprintf("%s.%s", dbusIfaceOS, member)
+}
+
 func (c *Client) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
@@ -83,49 +87,139 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// sendStatusUpdate gets the status via GetStatus and passes it along to the
-// receiver channel. If any error occurs it is logged.
-func (c *Client) sendStatusUpdate(rcvr chan Status) {
-	// if there is an error getting the current status, just log it and
-	// move onto the main loop.
-	st, err := c.GetStatus()
-	if err != nil {
-		glog.Warningf("error getting rpm-ostree status: %v", err)
-	} else {
-		rcvr <- st
-	}
-}
-
-// ReceiveStatuses receives signal messages from dbus and sends them as Statuses
+// WatchForUpdate regularly checks for new rpm-ostree updates receives signal messages from dbus and sends them as Statuses
 // on the rcvr channel, until the stop channel is closed. An attempt is made to
 // get the initial status and send it on the rcvr channel before receiving
 // starts.
-func (c *Client) ReceiveStatuses(rcvr chan Status, stop <-chan struct{}) {
-	c.sendStatusUpdate(rcvr)
-	// XXX: We could probably increase the interval even more if we use
-	// filesystem notifications instead if we want to narrow the window between
-	// deployment staging and reboot.
+func (c *Client) WatchForUpdate(rcvr chan Status, stop <-chan struct{}) {
 	t := time.Tick(statePollInterval)
 	for {
 		select {
 		case <-stop:
 			return
 		case <-t:
-			c.sendStatusUpdate(rcvr)
+			c.checkForUpdate(rcvr)
 		}
 	}
 }
 
-// GetStatus gets the current status from rpm-ostree
-func (c *Client) GetStatus() (Status, error) {
-	glog.Info("Getting status from rpm-ostree")
+// Check for an update, and stages the update if found.
+func (c *Client) checkForUpdate(rcvr chan Status) {
+	glog.Info("Checking for update")
+
+	// We could go straight to Upgrade() here. The nice thing with using
+	// AutomaticUpdateTrigger() first is to make it easier eventually to split
+	// out "checking" from "downloading & staging".
+	rcvr <- Status{CurrentStatus: RpmOstreeUpdateChecking}
 
 	bootedOS := c.conn.Object(dbusName, c.osPath)
-	prop, err := bootedOS.GetProperty(dbusMember(dbusIfaceOS, "CachedUpdate"))
+	err := callAutomaticUpdateTrigger(bootedOS)
 	if err != nil {
-		return Status{}, err
+		glog.Warningf("Error calling AutomaticUpdateTrigger(): %v", err)
+		rcvr <- NewStatus(RpmOstreeUpdateError, nil)
+		return
 	}
 
-	dict := prop.Value().(map[string]dbus.Variant)
-	return NewStatus(dict), nil
+	cachedUpdate, err := getCachedUpdate(bootedOS)
+	if err != nil {
+		glog.Warningf("Error reading CachedUpdate property: %v", err)
+		rcvr <- NewStatus(RpmOstreeUpdateError, nil)
+		return
+	}
+
+	if len(cachedUpdate) == 0 {
+		// No updates, we're done
+		rcvr <- NewStatus(RpmOstreeUpdateNone, nil)
+		return
+	}
+
+	err = callUpgrade(bootedOS)
+	if err != nil {
+		glog.Warningf("Error calling Upgrade(): %v", err)
+		rcvr <- NewStatus(RpmOstreeUpdateError, nil)
+		return
+	}
+
+	// XXX: need to sanity check that a new deployment really is staged
+	// XXX: race: should use deployment info for details, not cachedUpdate, in
+	// case we somehow update past what we saw during AutomaticUpdateTrigger()
+	// XXX: we'll have to make this smarter for auto-rollback eventually
+	rcvr <- NewStatus(RpmOstreeUpdateStaged, cachedUpdate)
+	return
+}
+
+func callAutomaticUpdateTrigger(bootedOS dbus.BusObject) error {
+	options_map := make(map[string]dbus.Variant)
+	options_map["mode"] = dbus.MakeVariant("check")
+	var enabled bool
+	var addr string
+	err := bootedOS.Call(dbusOSMember("AutomaticUpdateTrigger"), 0, options_map).Store(&enabled, &addr)
+	if err != nil {
+		return err
+	}
+
+	return runTransactionSync(addr)
+}
+
+func getCachedUpdate(bootedOS dbus.BusObject) (map[string]dbus.Variant, error) {
+	// Unlike GDBus, it seem like godbus doesn't do any property caching, so we
+	// don't have to call Reload() right after a transaction.
+	prop, err := bootedOS.GetProperty(dbusOSMember("CachedUpdate"))
+	if err != nil {
+		return nil, err
+	}
+
+	return prop.Value().(map[string]dbus.Variant), nil
+}
+
+func callUpgrade(bootedOS dbus.BusObject) error {
+	options_map := make(map[string]dbus.Variant)
+	var addr string
+	err := bootedOS.Call(dbusOSMember("Upgrade"), 0, options_map).Store(&addr)
+	if err != nil {
+		return err
+	}
+
+	return runTransactionSync(addr)
+}
+
+// D-Bus rpm-ostree transaction goop helper
+func runTransactionSync(address string) error {
+
+	transaction_conn, err := dbus.Dial(address)
+	if err != nil {
+		return err
+	}
+	defer transaction_conn.Close()
+
+	methods := []dbus.Auth{dbus.AuthExternal(strconv.Itoa(os.Getuid()))}
+	err = transaction_conn.Auth(methods)
+	if err != nil {
+		return err
+	}
+
+	transaction := transaction_conn.Object("org.projectatomic.rpmostree1", "/")
+	signalCh := make(chan *dbus.Signal, 1)
+	transaction_conn.Signal(signalCh)
+
+	err = transaction.Call("org.projectatomic.rpmostree1.Transaction.Start", 0).Err
+	if err != nil {
+		return err
+	}
+
+	var success bool
+	var errMsg string
+	for signal := range signalCh { // XXX: should probably have a timeout here
+		if signal.Name == "org.projectatomic.rpmostree1.Transaction.Finished" {
+			success = signal.Body[0].(bool)
+			errMsg = signal.Body[1].(string)
+			break
+		}
+	}
+
+	if !success {
+		return fmt.Errorf(errMsg)
+	}
+
+	return nil
 }

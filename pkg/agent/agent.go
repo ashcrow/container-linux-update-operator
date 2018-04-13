@@ -94,6 +94,7 @@ func (k *Klocksmith) process(stop <-chan struct{}) error {
 	anno := map[string]string{
 		constants.AnnotationRebootInProgress: constants.False,
 		constants.AnnotationRebootNeeded:     constants.False,
+		constants.AnnotationStatus:           updateengine.RpmOstreeUpdateNone,
 	}
 	labels := map[string]string{
 		constants.LabelRebootNeeded: constants.False,
@@ -115,7 +116,7 @@ func (k *Klocksmith) process(stop <-chan struct{}) error {
 		return err
 	}
 
-	// poll rpm-ostree for status updates
+	// keep checking for rpm-ostree for updates
 	// and set needs-reboot once we detect a staged deployment
 	go k.watchUpdateStatus(k.updateStatusCallback, stop)
 
@@ -253,7 +254,7 @@ func (k *Klocksmith) watchUpdateStatus(update func(s updateengine.Status), stop 
 	oldStatus := ""
 	ch := make(chan updateengine.Status, 1)
 
-	go k.ue.ReceiveStatuses(ch, stop)
+	go k.ue.WatchForUpdate(ch, stop)
 
 	for status := range ch {
 		if status.CurrentStatus != oldStatus && update != nil {

@@ -22,8 +22,12 @@ import (
 
 const (
 	RpmOstreeUpdateNone             = "RPM_OSTREE_UPDATE_NONE"
-	RpmOstreeUpdateAvailable        = "RPM_OSTREE_UPDATE_AVAILABLE"
+	RpmOstreeUpdateChecking         = "RPM_OSTREE_UPDATE_CHECKING"
+	// We could further break this down into Downloading, Staging, Staged using
+	// the download-only and cache-only options if we need that level of
+	// flexibility.
 	RpmOstreeUpdateStaged           = "RPM_OSTREE_UPDATE_STAGED"
+	RpmOstreeUpdateError            = "RPM_OSTREE_UPDATE_ERROR"
 )
 
 type Status struct {
@@ -34,10 +38,10 @@ type Status struct {
 	NewChecksum string
 }
 
-func NewStatus(cachedUpdate map[string]dbus.Variant) (s Status) {
+func NewStatus(state string, cachedUpdate map[string]dbus.Variant) (s Status) {
 
-	if len(cachedUpdate) == 0 {
-		return Status{CurrentStatus: RpmOstreeUpdateNone}
+	if cachedUpdate == nil || len(cachedUpdate) == 0 {
+		return Status{CurrentStatus: state}
 	}
 
 	checksum := cachedUpdate["checksum"].Value().(string)
@@ -48,11 +52,7 @@ func NewStatus(cachedUpdate map[string]dbus.Variant) (s Status) {
 		version = versionProp.Value().(string)
 	}
 
-	staged := cachedUpdate["staged"].Value().(bool)
-	if !staged {
-		return Status{RpmOstreeUpdateAvailable, version, checksum}
-	}
-	return Status{RpmOstreeUpdateStaged, version, checksum}
+	return Status{state, version, checksum}
 }
 
 func (s *Status) String() string {
