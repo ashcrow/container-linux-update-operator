@@ -14,6 +14,8 @@ spec:
         app: atomic-update-agent
     spec:
       serviceAccountName: default
+      # needed for D-Bus over abstract UNIX sockets in host network namespace
+      hostNetwork: true
       containers:
       - name: update-agent
         image: quay.io/spiketesting/atomic-update-operator:v0.0.0
