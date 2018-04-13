@@ -66,6 +66,13 @@ func New() (*Client, error) {
 		return nil, err
 	}
 
+	// explicitly disable rpm-ostree's native auto-updates feature, since we'll
+	// be taking over that role here
+	err = c.disableRPMOSTreeAutoUpdates()
+	if err != nil {
+		return nil, err
+	}
+
 	c.osPath = prop.Value().(dbus.ObjectPath)
 	glog.Infof("Booted OS path is %v", c.osPath)
 	return c, nil
@@ -84,6 +91,31 @@ func (c *Client) Close() error {
 	if c.conn != nil {
 		return c.conn.Close()
 	}
+	return nil
+}
+
+const (
+	dbusSdName      = "org.freedesktop.systemd1"
+	dbusSdManager   = "/org/freedesktop/systemd1"
+	dbusSdManagerIf = "org.freedesktop.systemd1.Manager"
+)
+
+func (c *Client) disableRPMOSTreeAutoUpdates() error {
+	// for now, just mask the systemd service -- alternatively, also mount
+	// /etc/rpm-ostreed.conf and turn off setting permanently?
+	mgr := c.conn.Object(dbusSdName, dbus.ObjectPath(dbusSdManager))
+
+	err := mgr.Call(dbusMember(dbusSdManagerIf, "MaskUnitFiles"), 0,
+	                [1]string{"rpm-ostreed-automatic.service"}, false, true).Err
+	if err != nil {
+		return err
+	}
+
+	err = mgr.Call(dbusMember(dbusSdManagerIf, "Reload"), 0).Err
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
